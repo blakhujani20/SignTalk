@@ -290,3 +290,4 @@ document.addEventListener("DOMContentLoaded", () => {
     receivedTextElement.textContent = "Waiting for partner to make signs...";
   }
 });
+window.startLocalVideo = startCamera;
