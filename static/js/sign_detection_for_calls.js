@@ -8,19 +8,29 @@ const cooldownPeriod = 500; // ms
 
 document.addEventListener('DOMContentLoaded', () => {
     const isDeafMode = window.location.search.includes("deaf=true");
-    
+
     if (isDeafMode) {
-        console.log("[SIGN] Deaf mode detected, will start sign language capture");
+        console.log("[SIGN] Deaf mode detected, will start camera + capture");
+
+        // START CAMERA
+        if (typeof startLocalVideo === 'function') {
+            startLocalVideo();
+        } else {
+            console.error("[ERROR] startLocalVideo() is not defined or not loaded");
+        }
+
+        // INIT SIGN DETECTION WHEN VIDEO STARTS PLAYING
         const localVideo = document.getElementById('localVideo');
         if (localVideo) {
             localVideo.addEventListener('playing', () => {
                 setTimeout(() => {
                     startSignDetection(localVideo);
-                }, 2000);
+                }, 1000);
             });
         }
     }
 });
+
 
 function startSignDetection(videoElement) {
     if (isCapturing) return;
