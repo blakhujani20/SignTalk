@@ -237,16 +237,20 @@ def handle_ice_candidate(data):
 
 if __name__ == '__main__':
     logger.info("Starting the application...")
+
     try:
         import socket
-        try:
-            hostname = socket.gethostname()
-            local_ip = socket.gethostbyname(hostname)
-            logger.info(f"Server running at http://{local_ip}:5000")
-        except Exception as ip_error:
-            logger.warning(f"Could not resolve local IP: {ip_error}")
-        
-        socketio.run(app, host='0.0.0.0', port=5000, debug=True, allow_unsafe_werkzeug=True)
+        hostname = socket.gethostname()
+        local_ip = socket.gethostbyname(hostname)
+        logger.info(f"Resolved local IP: {local_ip}")
+    except Exception as ip_error:
+        logger.warning(f"Could not resolve local IP: {ip_error}")
+
+    try:
+        import os
+        port = int(os.environ.get("PORT", 10000))  # Use Render's assigned port
+        logger.info(f"Listening on 0.0.0.0:{port}")
+        socketio.run(app, host='0.0.0.0', port=port)
 
     except Exception as e:
         logger.error(f"Error starting server: {e}")
