@@ -1,26 +1,44 @@
 import cv2
 import numpy as np
-import time
+import eventlet  # NEW
+import os
 
 def generate_frames(model):
-    camera = cv2.VideoCapture(0)
-    
-    camera.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-    camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-    
-    if not camera.isOpened():
-        raise RuntimeError("Could not start camera")
-    
-    while True:
-        success, frame = camera.read()
-        if not success:
-            break
+    try:
+        camera = cv2.VideoCapture(0)
+        camera.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 
-        processed_frame, _, _ = process_frame(frame, model)
-        ret, buffer = cv2.imencode('.jpg', processed_frame)
-        processed_frame = buffer.tobytes()
-        yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + processed_frame + b'\r\n')
+        if not camera.isOpened():
+            raise RuntimeError("Could not start camera")
+
+        while True:
+            success, frame = camera.read()
+            if not success:
+                break
+
+            processed_frame, _, _ = process_frame(frame, model)
+            ret, buffer = cv2.imencode('.jpg', processed_frame)
+            processed_frame = buffer.tobytes()
+
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n\r\n' + processed_frame + b'\r\n')
+
+            eventlet.sleep(0.05)  # Add eventlet-compatible delay (~20 FPS)
+
+    except Exception as e:
+        print(f"[ERROR] Video capture failed (likely on Render): {e}")
+        while True:
+            frame = np.zeros((480, 640, 3), dtype=np.uint8)
+            cv2.putText(
+                frame, "Camera not available", (50, 240),
+                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2
+            )
+            ret, buffer = cv2.imencode('.jpg', frame)
+            frame = buffer.tobytes()
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+            eventlet.sleep(0.5)
 
 def process_frame(frame, model):
     try:
