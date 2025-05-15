@@ -1,0 +1,94 @@
+{% extends 'base.html' %}
+{% block title %}Video Call | SignTalk{% endblock %}
+
+{% block content %}
+<section class="main-content">
+    <h2 class="text-center mb-2">Live SignTalk Video Call</h2>
+
+    <div class="video-section card">
+        <div class="video-grid">
+            <div class="video-box">
+                <h4 class="text-center">You</h4>
+                <video id="localVideo" autoplay muted playsinline class="card shadow"></video>
+                {% if request.args.get('deaf') == 'true' %}
+                <div class="card mt-1">
+                    <h5>Your Signs:</h5>
+                    <p id="sentText" class="output-text">No signs detected yet...</p>
+                </div>
+                {% endif %}
+            </div>
+            <div class="video-box">
+                <h4 class="text-center">Partner</h4>
+                <video id="remoteVideo" autoplay playsinline class="card shadow"></video>
+            </div>
+        </div>
+
+        <div class="text-center mt-2">
+            <input type="text" id="roomInput" placeholder="Enter room name..." class="input room-input">
+            <button id="joinButton" class="btn primary">Join Room</button>
+        </div>
+
+        <div class="text-center mt-2 mode-switch">
+            <strong>Mode:</strong> <span id="modeIndicator">Regular</span>
+            <div class="mt-1">
+                <a href="?deaf=true" class="btn small">Switch to Deaf Mode</a>
+                <a href="?" class="btn small">Switch to Regular Mode</a>
+            </div>
+        </div>
+
+        <div class="card mt-2">
+            <h4>Live Transcript:</h4>
+            <p id="receivedText" class="output-text">Waiting for signs...</p>
+        </div>
+
+        <div class="connection-status text-center mt-1">
+            <p id="connectionStatus">Not connected</p>
+            {% if request.args.get('deaf') == 'true' %}
+            <button id="clearSignsButton" class="btn small">Clear Signs</button>
+            {% endif %}
+        </div>
+
+        <p class="tip text-center mt-1">
+            Tip: Open this page in two devices — one in <strong>Deaf Mode</strong> and one in <strong>Regular Mode</strong>. Use the same room name on both.
+        </p>
+    </div>
+</section>
+
+<script src="https://cdn.socket.io/4.6.1/socket.io.min.js" crossorigin="anonymous"></script>
+<script src="{{ url_for('static', filename='js/call.js') }}"></script>
+<script src="{{ url_for('static', filename='js/sign_detection_for_calls.js') }}"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const isDeaf = window.location.search.includes("deaf=true");
+        document.getElementById('modeIndicator').textContent = isDeaf ? 'Deaf Side (Sign Detection Active)' : 'Regular';
+        if (isDeaf) {
+            document.body.classList.add('deaf-mode');
+        }
+        const connectionStatus = document.getElementById('connectionStatus');
+        if (window.socket) {
+            window.socket.on('joined_room', ({ count }) => {
+                connectionStatus.textContent = `Connected with ${count - 1} other user(s)`;
+                connectionStatus.style.color = count >= 2 ? '#4CAF50' : '#FF9800';
+            });
+            window.socket.on('user_joined', ({ count }) => {
+                connectionStatus.textContent = `Connected with ${count - 1} other user(s)`;
+                connectionStatus.style.color = count >= 2 ? '#4CAF50' : '#FF9800';
+            });
+            window.socket.on('user_left', ({ count }) => {
+                connectionStatus.textContent = count <= 1 ?
+                    'Waiting for another user to join...' :
+                    `Connected with ${count - 1} other user(s)`;
+                connectionStatus.style.color = count >= 2 ? '#4CAF50' : '#FF9800';
+            });
+        }
+        const clearBtn = document.getElementById('clearSignsButton');
+        if (clearBtn) {
+            clearBtn.addEventListener('click', () => {
+                if (typeof clearSignHistory === 'function') {
+                    clearSignHistory();
+                }
+            });
+        }
+    });
+</script>
+{% endblock %}

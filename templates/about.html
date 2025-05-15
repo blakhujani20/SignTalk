@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+{% block title %}About | SignTalk{% endblock %}
+
+{% block content %}
+<section class="main-content">
+    <div class="card">
+        <h2 class="text-center">About SignTalk</h2>
+        <p class="mt-1">
+            <strong>SignTalk</strong> is an AI-powered web application designed to bridge communication between the deaf and non-deaf. It translates real-time sign language into readable text and voice using machine learning and computer vision.
+        </p>
+        <p>
+            Built using <strong>Flask</strong>, <strong>TensorFlow</strong>, and <strong>MediaPipe</strong>, the app offers:
+        </p>
+        <ul class="tech-list">
+            <li>&#10003; Real-time ASL hand detection</li>
+            <li>&#10003; Live video call with automatic sign recognition</li>
+            <li>&#10003; Text-to-speech integration for hearing participants</li>
+            <li>&#10003; Multi-device support via SocketIO and WebRTC</li>
+        </ul>
+    </div>
+
+    <div class="card mt-2">
+        <h3 class="text-center">Project Information</h3>
+        <p class="mt-1">
+            This project was developed by <strong>Bhavesh Lakhujani</strong>, B.E. student in AI & Data Science at MBM University, Jodhpur.
+        </p>
+    </div>
+</section>
+{% endblock %}

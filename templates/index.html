@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+{% block title %}Home | SignTalk{% endblock %}
+
+{% block content %}
+<section class="hero">
+    <div class="hero-text">
+        <h2>Welcome to <span class="highlight">SignTalk</span></h2>
+        <p>Bridge the communication gap between the deaf and hearing communities using real-time AI and video communication.</p>
+        <div class="btn-group mt-2">
+            <a href="/video_call" class="btn primary">Start Video Call</a>
+            <a href="#demo" class="btn secondary">Try Demo</a>
+        </div>
+    </div>
+</section>
+
+<section class="demo" id="demo">
+    <h3 class="text-center mb-1">Practice Sign Language Recognition</h3>
+    <div class="flex center mb-1">
+        <video id="video" width="400" height="300" autoplay muted class="card"></video>
+    </div>
+
+    <div class="text-center">
+        <button onclick="toggleCamera()" class="btn">Start Camera</button>
+        <button onclick="clearTranscript()" class="btn ml-1">Clear Transcript</button>
+    </div>
+
+    <div class="card mt-2">
+        <h4>Detected Sign:</h4>
+        <p id="outputText" class="output-text">Waiting for input...</p>
+    </div>
+
+    <div class="card mt-2">
+        <h4>Sentence History</h4>
+        <div id="historyBox" class="history-box"></div>
+    </div>
+</section>
+
+<script src="https://cdn.socket.io/4.6.1/socket.io.min.js" crossorigin="anonymous"></script>
+<script src="{{ url_for('static', filename='js/main.js') }}"></script>
+{% endblock %}
