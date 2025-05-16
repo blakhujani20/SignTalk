@@ -1,7 +1,7 @@
 import eventlet
 eventlet.monkey_patch()
 
-from flask import Flask, render_template, Response, jsonify, request, send_from_directory
+from flask import Flask, render_template, Response, jsonify, request, send_from_directory, session
 import cv2
 import numpy as np
 import time
@@ -10,16 +10,36 @@ from flask_socketio import SocketIO, emit, join_room, leave_room
 import os
 import logging
 import traceback
+from logging.handlers import RotatingFileHandler
 from models.sign_language_model import SignLanguageModel
 from utils.video_feed import generate_frames, process_frame
 from utils.postprocessing import form_sentence
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+if not os.path.exists('logs'):
+    os.mkdir('logs')
+
+file_handler = RotatingFileHandler('logs/signtalk.log', maxBytes=10240, backupCount=10)
+file_handler.setFormatter(logging.Formatter(
+    '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'
+))
+file_handler.setLevel(logging.INFO)
+
+logger = logging.getLogger('signtalk')
+logger.setLevel(logging.INFO)
+logger.addHandler(file_handler)
+logger.info('SignTalk startup')
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'secret!'
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet', ping_timeout=60, ping_interval=25)
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'default-dev-key')
+
+socketio = SocketIO(
+    app, 
+    cors_allowed_origins="*", 
+    async_mode='eventlet', 
+    ping_timeout=60, 
+    ping_interval=25,
+    ssl_context=None
+)
 
 try:
     model = SignLanguageModel()
@@ -28,11 +48,18 @@ except Exception as e:
     logger.error(f"Error loading model: {e}")
     model = None
 
-prediction_history = {}  
-last_prediction = {}  
-prediction_threshold = 0.6  
-cooldown_period = 0.5  
-last_prediction_time = {} 
+prediction_history = {}
+last_prediction = {}
+prediction_threshold = 0.6
+cooldown_period = 0.5
+last_prediction_time = {}
+
+@app.errorhandler(Exception)
+def handle_error(e):
+    logger.error(f"Unhandled exception: {e}")
+    logger.error(traceback.format_exc())
+    return jsonify({"error": "Internal server error"}), 500
+ 
 
 @app.route('/')
 def index():
@@ -59,8 +86,15 @@ def serve_static(path):
 
 @app.route('/predict', methods=['POST'])
 def predict():
+    from flask import session
     global prediction_history, last_prediction, last_prediction_time
-    user_id = request.sid if hasattr(request, 'sid') else 'default'
+
+    if 'user_id' not in session:
+        import uuid
+        session['user_id'] = str(uuid.uuid4())
+    
+    user_id = session.get('user_id', 'default')
+
     if user_id not in prediction_history:
         prediction_history[user_id] = []
     if user_id not in last_prediction:
@@ -80,15 +114,15 @@ def predict():
         img_bytes = file.read()
         nparr = np.frombuffer(img_bytes, np.uint8)
         frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        
+
         if frame is None or frame.size == 0:
             logger.warning("Received empty or corrupted frame")
             return jsonify({"error": "Invalid frame"}), 400
-            
+
         logger.info(f"Received frame with shape: {frame.shape}")
-        
+
         processed_frame, prediction, confidence = process_frame(frame, model)
-        
+
         current_time = time.time()
         logger.info(f"Prediction: {prediction}, Confidence: {confidence:.2f}")
 
@@ -100,11 +134,12 @@ def predict():
                 prediction_history[user_id].append(prediction)
                 last_prediction[user_id] = prediction
                 last_prediction_time[user_id] = current_time
-                
+
                 if len(prediction_history[user_id]) > 10:
                     prediction_history[user_id].pop(0)
-                    
+
                 logger.info(f"Added prediction to history for {user_id}. Current history: {prediction_history[user_id]}")
+
         sentence = form_sentence(prediction_history[user_id])
         logger.info(f"Formed sentence for {user_id}: {sentence}")
 
@@ -113,7 +148,7 @@ def predict():
             "confidence": float(confidence),
             "sentence": sentence
         })
-        
+
     except Exception as e:
         logger.error(f"Error processing frame: {str(e)}")
         logger.error(traceback.format_exc())

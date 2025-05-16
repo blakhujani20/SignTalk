@@ -1,0 +1,3 @@
+{
+  "packages": ["libgl1-mesa-dev", "libglib2.0-0"]
+}

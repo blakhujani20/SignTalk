@@ -27,12 +27,15 @@ const roomInput = document.getElementById("roomInput");
 const joinButton = document.getElementById("joinButton");
 const receivedTextElement = document.getElementById("receivedText");
 
+const isProduction = window.location.protocol === "https:";
 window.socket = io({
   transports: ["websocket", "polling"],
   path: "/socket.io",
+  secure: isProduction,
   reconnectionAttempts: 5,
   reconnectionDelay: 1000
 });
+
 
 window.socket.on("connect", () => console.log("[STATUS] Socket connected"));
 window.socket.on("disconnect", () => console.log("[STATUS] Socket disconnected"));

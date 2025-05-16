@@ -1,6 +1,6 @@
 import cv2
 import numpy as np
-import eventlet  # NEW
+import eventlet
 import os
 
 def generate_frames(model):
@@ -24,27 +24,31 @@ def generate_frames(model):
             yield (b'--frame\r\n'
                    b'Content-Type: image/jpeg\r\n\r\n' + processed_frame + b'\r\n')
 
-            eventlet.sleep(0.05)  # Add eventlet-compatible delay (~20 FPS)
+            eventlet.sleep(0.05)  
 
     except Exception as e:
-        print(f"[ERROR] Video capture failed (likely on Render): {e}")
+        print(f"[ERROR] Video capture failed: {e}")
         while True:
-            frame = np.zeros((480, 640, 3), dtype=np.uint8)
-            cv2.putText(
-                frame, "Camera not available", (50, 240),
-                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2
-            )
+            frame = generate_placeholder_frame("Camera not available in production")
             ret, buffer = cv2.imencode('.jpg', frame)
             frame = buffer.tobytes()
             yield (b'--frame\r\n'
                    b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
             eventlet.sleep(0.5)
 
+def generate_placeholder_frame(message):
+    frame = np.zeros((480, 640, 3), dtype=np.uint8)
+    cv2.putText(
+        frame, message, (50, 240),
+        cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2
+    )
+    return frame
+
 def process_frame(frame, model):
     try:
         h, w, _ = frame.shape
 
-        if w > 200:  
+        if w > 200:
             frame = cv2.flip(frame, 1)
 
         if w > 200:
@@ -62,11 +66,10 @@ def process_frame(frame, model):
 
             roi_frame = frame[roi_y:roi_y+roi_size, roi_x:roi_x+roi_size]
         else:
-            roi_frame = frame  
+            roi_frame = frame
 
         resized_frame = cv2.resize(roi_frame, (64, 64))
         normalized_frame = resized_frame / 255.0
-
         input_tensor = np.expand_dims(normalized_frame, axis=0)
 
         prediction_result = model.model.predict(input_tensor)
@@ -77,7 +80,6 @@ def process_frame(frame, model):
         if prediction == "no_hand":
             print("[DEBUG] No hand detected in frame.")
 
-        # Annotate prediction
         cv2.putText(
             frame,
             f"{prediction}: {confidence:.2f}",
@@ -102,4 +104,3 @@ def process_frame(frame, model):
             2
         )
         return frame, "error", 0.0
-
