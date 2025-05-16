@@ -1,6 +1,3 @@
-import eventlet
-eventlet.monkey_patch()
-
 from flask import Flask, render_template, Response, jsonify, request, send_from_directory, session
 import cv2
 import numpy as np
@@ -35,7 +32,7 @@ app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'default-dev-key')
 socketio = SocketIO(
     app, 
     cors_allowed_origins="*", 
-    async_mode='eventlet', 
+    async_mode='gevent', 
     ping_timeout=60, 
     ping_interval=25,
     ssl_context=None
