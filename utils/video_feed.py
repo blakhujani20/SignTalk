@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
-import eventlet
 import os
+from gevent import sleep
 
 def generate_frames(model):
     try:
@@ -24,7 +24,7 @@ def generate_frames(model):
             yield (b'--frame\r\n'
                    b'Content-Type: image/jpeg\r\n\r\n' + processed_frame + b'\r\n')
 
-            eventlet.sleep(0.05)  
+            sleep(0.05)  # Changed from eventlet.sleep to gevent.sleep
 
     except Exception as e:
         print(f"[ERROR] Video capture failed: {e}")
@@ -34,7 +34,7 @@ def generate_frames(model):
             frame = buffer.tobytes()
             yield (b'--frame\r\n'
                    b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
-            eventlet.sleep(0.5)
+            sleep(0.5)  # Changed from eventlet.sleep to gevent.sleep
 
 def generate_placeholder_frame(message):
     frame = np.zeros((480, 640, 3), dtype=np.uint8)
