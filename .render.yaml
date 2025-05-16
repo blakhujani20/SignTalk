@@ -1,10 +1,15 @@
 services:
   - type: web
-    name: signtalk
-    env: python
+    name: sign-language-app
+    runtime: python
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn --worker-class eventlet -w 1 app:app
+    startCommand: gunicorn app:app
     envVars:
-      - key: SECRET_KEY
-        generateValue: true
-    plan: standard
+      - key: PYTHON_VERSION
+        value: 3.11.8
+      - key: ENV
+        value: production
+    build:
+      packages:
+        - libgl1-mesa-dev
+        - libglib2.0-0
