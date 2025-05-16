@@ -14,4 +14,4 @@ COPY . .
 
 ENV PORT=10000
 
-CMD gunicorn --worker-class gevent -w 1 -b 0.0.0.0:$PORT app:app
+CMD gunicorn --worker-class gevent -w 1 --timeout 120 -b 0.0.0.0:$PORT app:app

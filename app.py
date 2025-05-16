@@ -60,17 +60,19 @@ def handle_error(e):
 
 @app.route('/')
 def index():
-    """Main page with video feed and interpretation"""
     return render_template('index.html')
+
+@app.route('/health')
+def health():
+    return "OK", 200
+
 
 @app.route('/about')
 def about():
-    """About page with project information"""
     return render_template('about.html')
 
 @app.route('/video_feed')
 def video_feed():
-    """Video streaming route for webcam feed"""
     return Response(
         generate_frames(model),
         mimetype='multipart/x-mixed-replace; boundary=frame'
@@ -78,7 +80,6 @@ def video_feed():
 
 @app.route('/static/<path:path>')
 def serve_static(path):
-    """Serve static files"""
     return send_from_directory('static', path)
 
 @app.route('/predict', methods=['POST'])
@@ -154,7 +155,6 @@ def predict():
 
 @app.route('/clear_history', methods=['POST'])
 def clear_history():
-    """Clear the prediction history"""
     user_id = request.sid if hasattr(request, 'sid') else 'default'
     
     if user_id in prediction_history:
@@ -165,7 +165,6 @@ def clear_history():
 
 @app.route('/available_signs')
 def available_signs():
-    """Return list of available signs that can be recognized"""
     if model is None:
         return jsonify({"error": "Model not loaded"}), 500
         
