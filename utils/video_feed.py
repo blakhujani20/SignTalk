@@ -4,6 +4,7 @@ import os
 from gevent import sleep
 import logging
 import traceback
+import tensorflow as tf
 
 logger = logging.getLogger('signtalk')
 
