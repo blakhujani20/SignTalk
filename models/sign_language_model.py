@@ -6,28 +6,47 @@ import os
 
 class SignLanguageModel:
     def __init__(self, model_path=None):
-        if model_path is None:
-            model_path = os.path.join(os.path.dirname(__file__), 'asl_model.h5')
-        
-        self.model = tf.keras.models.load_model(model_path)
-        
-        print("[DEBUG] Model input shape:", self.model.input_shape)
-        print("[DEBUG] Model output shape:", self.model.output_shape)
-        
-        self.mp_hands = mp.solutions.hands
-        self.hands = self.mp_hands.Hands(
-            static_image_mode=False,
-            max_num_hands=1,
-            min_detection_confidence=0.5,
-            min_tracking_confidence=0.5
-        )
-        self.mp_drawing = mp.solutions.drawing_utils
+        try:
+            if model_path is None:
+                potential_paths = [
+                    os.path.join(os.path.dirname(__file__), 'asl_model.h5'),
+                    os.path.join(os.path.dirname(os.path.dirname(__file__)), 'models', 'asl_model.h5'),
+                    'asl_model.h5',  # Current directory
+                    '/app/models/asl_model.h5',  # Docker container path
+                ]
+                
+                for path in potential_paths:
+                    if os.path.exists(path):
+                        model_path = path
+                        print(f"[INFO] Found model at: {model_path}")
+                        break
+                        
+                if model_path is None:
+                    raise FileNotFoundError("Could not find model file in any of the expected locations")
+            
+            print(f"[INFO] Loading model from: {model_path}")
+            self.model = tf.keras.models.load_model(model_path)
+            
+            print("[DEBUG] Model input shape:", self.model.input_shape)
+            print("[DEBUG] Model output shape:", self.model.output_shape)
+            
+            self.mp_hands = mp.solutions.hands
+            self.hands = self.mp_hands.Hands(
+                static_image_mode=False,
+                max_num_hands=1,
+                min_detection_confidence=0.5,
+                min_tracking_confidence=0.5
+            )
+            self.mp_drawing = mp.solutions.drawing_utils
 
-        self.classes = [
-            'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J',
-            'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T',
-            'U', 'V', 'W', 'X', 'Y', 'Z', 'del', 'nothing', 'space'
-        ]
+            self.classes = [
+                'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J',
+                'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T',
+                'U', 'V', 'W', 'X', 'Y', 'Z', 'del', 'nothing', 'space'
+            ]
+        except Exception as e:
+            print(f"[ERROR] Failed to initialize model: {e}")
+            raise
     
     def preprocess_image(self, image):
 
@@ -116,3 +135,23 @@ class SignLanguageModel:
     
     def get_classes(self):
         return self.classes
+    
+    # Add to SignLanguageModel class
+    def fallback_predict(self, image):
+        """Provide a simple fallback when regular prediction fails"""
+        try:
+            # Resize and normalize
+            img = cv2.resize(image, (64, 64))
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            img = img / 255.0
+            
+            # Make prediction
+            prediction = self.model.predict(np.expand_dims(img, axis=0))
+            predicted_class_idx = np.argmax(prediction[0])
+            confidence = float(prediction[0][predicted_class_idx])
+            predicted_class = self.classes[predicted_class_idx]
+            
+            return predicted_class, confidence
+        except Exception as e:
+            print(f"[ERROR] Fallback prediction failed: {e}")
+            return "error", 0.0

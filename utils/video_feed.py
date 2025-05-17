@@ -2,6 +2,10 @@ import cv2
 import numpy as np
 import os
 from gevent import sleep
+import logging
+import traceback
+
+logger = logging.getLogger('signtalk')
 
 def generate_frames(model):
     try:
@@ -24,7 +28,7 @@ def generate_frames(model):
             yield (b'--frame\r\n'
                    b'Content-Type: image/jpeg\r\n\r\n' + processed_frame + b'\r\n')
 
-            sleep(0.05)  # Changed from eventlet.sleep to gevent.sleep
+            sleep(0.05)  
 
     except Exception as e:
         print(f"[ERROR] Video capture failed: {e}")
@@ -34,7 +38,7 @@ def generate_frames(model):
             frame = buffer.tobytes()
             yield (b'--frame\r\n'
                    b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
-            sleep(0.5)  # Changed from eventlet.sleep to gevent.sleep
+            sleep(0.5)  
 
 def generate_placeholder_frame(message):
     frame = np.zeros((480, 640, 3), dtype=np.uint8)
@@ -46,43 +50,38 @@ def generate_placeholder_frame(message):
 
 def process_frame(frame, model):
     try:
+        if model is None:
+            raise ValueError("Model is not loaded")
+            
         h, w, _ = frame.shape
+        logger.info(f"Processing frame with dimensions {w}x{h}")
 
         if w > 200:
             frame = cv2.flip(frame, 1)
 
-        if w > 200:
-            roi_size = min(h, w) // 2
-            roi_x = w // 2 - roi_size // 2
-            roi_y = h // 2 - roi_size // 2
+        # 
+        try:
+            processed_img, annotated_frame, hand_detected = model.preprocess_image(frame)
+            logger.info(f"Preprocessed image shape: {processed_img.shape}, Hand detected: {hand_detected}")
+        except Exception as preproc_error:
+            logger.error(f"Error in preprocess_image: {str(preproc_error)}")
+            logger.error(traceback.format_exc())
+            return frame, "preprocess_error", 0.0
 
-            cv2.rectangle(
-                frame,
-                (roi_x, roi_y),
-                (roi_x + roi_size, roi_y + roi_size),
-                (0, 255, 0),
-                2
-            )
-
-            roi_frame = frame[roi_y:roi_y+roi_size, roi_x:roi_x+roi_size]
-        else:
-            roi_frame = frame
-
-        resized_frame = cv2.resize(roi_frame, (64, 64))
-        normalized_frame = resized_frame / 255.0
-        input_tensor = np.expand_dims(normalized_frame, axis=0)
-
-        prediction_result = model.model.predict(input_tensor)
-        predicted_class_index = np.argmax(prediction_result)
-        confidence = float(prediction_result[0][predicted_class_index])
-        prediction = model.classes[predicted_class_index]
-
-        if prediction == "no_hand":
-            print("[DEBUG] No hand detected in frame.")
+        try:
+            prediction = model.model.predict(np.expand_dims(processed_img, axis=0))
+            predicted_class_idx = np.argmax(prediction[0])
+            confidence = float(prediction[0][predicted_class_idx])
+            predicted_class = model.classes[predicted_class_idx]
+            logger.info(f"Model prediction successful: {predicted_class} with confidence {confidence:.2f}")
+        except Exception as pred_error:
+            logger.error(f"Error in model prediction: {str(pred_error)}")
+            logger.error(traceback.format_exc())
+            return frame, "prediction_error", 0.0
 
         cv2.putText(
             frame,
-            f"{prediction}: {confidence:.2f}",
+            f"{predicted_class}: {confidence:.2f}",
             (10, 30),
             cv2.FONT_HERSHEY_SIMPLEX,
             1,
@@ -90,10 +89,11 @@ def process_frame(frame, model):
             2
         )
 
-        return frame, prediction, confidence
+        return frame, predicted_class, confidence
 
     except Exception as e:
-        print(f"[ERROR] Frame processing failed: {e}")
+        logger.error(f"Error in process_frame: {str(e)}")
+        logger.error(traceback.format_exc())
         cv2.putText(
             frame,
             f"Error: {str(e)}",

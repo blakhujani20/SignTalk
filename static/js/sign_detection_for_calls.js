@@ -3,6 +3,8 @@ let captureInterval = null;
 let predictionHistory = [];
 let lastPrediction = null;
 let lastPredictionTime = 0;
+let clientId = 'client_' + Math.random().toString(36).substring(2, 9);
+let failedAttempts = 0;
 const predictionThreshold = 0.6;
 const cooldownPeriod = 500; // ms
 
@@ -56,13 +58,14 @@ function stopSignDetection() {
     console.log("[SIGN] Stopped sign language detection");
 }
 
-const clientId = 'client_' + Math.random().toString(36).substring(2, 9);
 function captureAndProcessFrame(videoElement, canvas, ctx) {
     if (!videoElement || videoElement.paused || videoElement.ended) {
+        console.log("[DEBUG] Video not ready for processing");
         return;
     }
 
     try {
+        // Ensure proper dimensions
         canvas.width = videoElement.videoWidth || 320;
         canvas.height = videoElement.videoHeight || 240;
         
@@ -77,9 +80,9 @@ function captureAndProcessFrame(videoElement, canvas, ctx) {
             const formData = new FormData();
             formData.append('frame', blob, 'frame.jpg');
             
-            console.log("[DEBUG] Sending frame blob size:", blob.size);
+            console.log(`[DEBUG] Sending frame blob size: ${blob.size}`);
             
-            fetch('/predict?client_id=' + clientId, {
+            fetch(`/predict?client_id=${clientId}`, {
                 method: 'POST',
                 body: formData
             })
@@ -90,11 +93,26 @@ function captureAndProcessFrame(videoElement, canvas, ctx) {
                 return response.json();
             })
             .then(data => {
-                console.log("[DEBUG] Received prediction:", data);
-                processSignPrediction(data);
+                // Check if data has required fields
+                if (data && typeof data.prediction !== 'undefined' && typeof data.confidence !== 'undefined') {
+                    console.log(`[SIGN] Prediction: ${data.prediction}, Confidence: ${data.confidence}`);
+                    processSignPrediction(data);
+                } else {
+                    console.warn("[WARN] Received incomplete prediction data:", data);
+                }
             })
-            .catch(error => console.error("[ERROR] Failed to get prediction:", error));
-        }, 'image/jpeg', 0.8);
+            .catch(error => {
+                console.error("[ERROR] Failed to get prediction:", error);
+                // After several failed attempts, consider restarting the sign detection
+                failedAttempts++;
+                if (failedAttempts > 5) {
+                    console.log("[SIGN] Too many failed attempts, restarting sign detection...");
+                    stopSignDetection();
+                    setTimeout(() => startSignDetection(videoElement), 3000);
+                    failedAttempts = 0;
+                }
+            });
+        }, 'image/jpeg', 0.7); // Reduced quality for better performance
     } catch (e) {
         console.error("[ERROR] Frame capture error:", e);
     }

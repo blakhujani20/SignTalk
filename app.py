@@ -39,10 +39,12 @@ socketio = SocketIO(
 )
 
 try:
+    logger.info("Starting to load sign language model...")
     model = SignLanguageModel()
-    logger.info("Model loaded successfully")
+    logger.info(f"Model loaded successfully. Input shape: {model.model.input_shape}, Output shape: {model.model.output_shape}")
 except Exception as e:
-    logger.error(f"Error loading model: {e}")
+    logger.error(f"Error loading model: {str(e)}")
+    logger.error(traceback.format_exc())
     model = None
 
 prediction_history = {}
@@ -84,21 +86,15 @@ def serve_static(path):
 
 @app.route('/predict', methods=['POST'])
 def predict():
-    from flask import session
-    import traceback
-    import uuid
-
-    global prediction_history, last_prediction, last_prediction_time
-    client_id = request.args.get('client_id', 'default')
-    if 'user_id' not in session:
-        session['user_id'] = client_id or str(uuid.uuid4())
-    user_id = session.get('user_id', client_id)
-
     try:
-        logger.info(f"Received prediction request: Content-Type: {request.content_type}, Content-Length: {request.content_length}")
-
+        client_id = request.args.get('client_id', 'default')
+        logger.info(f"Received prediction request from client: {client_id}")
+        
+        user_id = client_id
+        
         if user_id not in prediction_history:
             prediction_history[user_id] = []
+            logger.info(f"Initialized history for new client: {user_id}")
         if user_id not in last_prediction:
             last_prediction[user_id] = None
         if user_id not in last_prediction_time:
@@ -108,55 +104,73 @@ def predict():
             logger.error("Model not loaded")
             return jsonify({"error": "Model not loaded"}), 500
 
+        logger.info(f"Request content type: {request.content_type}")
+        logger.info(f"Request files: {list(request.files.keys())}")
+        
         file = request.files.get('frame')
         if not file:
             logger.warning("No frame provided in request")
             return jsonify({"error": "No frame provided"}), 400
 
-        logger.info(f"Received file: {file.filename}, Content-Type: {file.content_type}")
+        try:
+            img_bytes = file.read()
+            logger.info(f"Read {len(img_bytes)} bytes from uploaded frame")
+            
+            nparr = np.frombuffer(img_bytes, np.uint8)
+            frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
-        img_bytes = file.read()
-        nparr = np.frombuffer(img_bytes, np.uint8)
-        frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            if frame is None or frame.size == 0:
+                logger.warning("Received empty or corrupted frame")
+                return jsonify({"error": "Invalid frame"}), 400
 
-        if frame is None or frame.size == 0:
-            logger.warning("Received empty or corrupted frame")
-            return jsonify({"error": "Invalid frame"}), 400
+            logger.info(f"Decoded frame with shape: {frame.shape}")
+            
+            try:
+                processed_frame, prediction, confidence = process_frame(frame, model)
+                logger.info(f"Frame processed successfully. Prediction: {prediction}, Confidence: {confidence:.2f}")
+            except Exception as proc_error:
+                logger.error(f"Error in process_frame: {str(proc_error)}")
+                logger.error(traceback.format_exc())
+                return jsonify({"error": f"Frame processing error: {str(proc_error)}"}), 500
 
-        logger.info(f"Decoded frame with shape: {frame.shape}")
-        processed_frame, prediction, confidence = process_frame(frame, model)
+            current_time = time.time()
+            
+            if confidence > prediction_threshold and (
+                last_prediction[user_id] != prediction or 
+                current_time - last_prediction_time[user_id] > cooldown_period
+            ):
+                if prediction not in ['nothing', 'no_hand', 'error']:
+                    prediction_history[user_id].append(prediction)
+                    last_prediction[user_id] = prediction
+                    last_prediction_time[user_id] = current_time
 
-        logger.info(f"Prediction: {prediction}, Confidence: {confidence:.2f}")
+                    if len(prediction_history[user_id]) > 10:
+                        prediction_history[user_id].pop(0)
 
-        current_time = time.time()
-        if confidence > prediction_threshold and (
-            last_prediction[user_id] != prediction or 
-            current_time - last_prediction_time[user_id] > cooldown_period
-        ):
-            if prediction not in ['nothing', 'no_hand', 'error']:
-                prediction_history[user_id].append(prediction)
-                last_prediction[user_id] = prediction
-                last_prediction_time[user_id] = current_time
+                    logger.info(f"Added prediction to history. Current history: {prediction_history[user_id]}")
 
-                if len(prediction_history[user_id]) > 10:
-                    prediction_history[user_id].pop(0)
+            try:
+                sentence = form_sentence(prediction_history[user_id])
+                logger.info(f"Formed sentence: {sentence}")
+            except Exception as sent_error:
+                logger.error(f"Error forming sentence: {str(sent_error)}")
+                sentence = ""
 
-                logger.info(f"Added prediction to history for {user_id}. Current history: {prediction_history[user_id]}")
+            return jsonify({
+                "prediction": prediction,
+                "confidence": float(confidence),
+                "sentence": sentence
+            })
 
-        sentence = form_sentence(prediction_history[user_id])
-        logger.info(f"Formed sentence for {user_id}: {sentence}")
-
-        return jsonify({
-            "prediction": prediction,
-            "confidence": float(confidence),
-            "sentence": sentence
-        })
+        except Exception as img_error:
+            logger.error(f"Error processing image data: {str(img_error)}")
+            logger.error(traceback.format_exc())
+            return jsonify({"error": f"Image processing error: {str(img_error)}"}), 500
 
     except Exception as e:
-        logger.error(f"Error in predict endpoint: {str(e)}")
+        logger.error(f"Unhandled error in predict endpoint: {str(e)}")
         logger.error(traceback.format_exc())
-        return jsonify({"error": str(e), "traceback": traceback.format_exc()}), 500
-
+        return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @app.route('/clear_history', methods=['POST'])
 def clear_history():
