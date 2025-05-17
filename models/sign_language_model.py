@@ -25,7 +25,7 @@ class SignLanguageModel:
                     raise FileNotFoundError("Could not find model file in any of the expected locations")
             
             print(f"[INFO] Loading model from: {model_path}")
-            self.model = tf.keras.models.load_model(model_path)
+            self.model = tf.keras.models.load_model(model_path, compile=False)
             
             print("[DEBUG] Model input shape:", self.model.input_shape)
             print("[DEBUG] Model output shape:", self.model.output_shape)
