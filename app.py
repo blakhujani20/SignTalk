@@ -148,6 +148,10 @@ def predict():
         })
 
     except Exception as e:
+        import traceback
+        import sys
+        print("🔥 Exception in /predict:", file=sys.stderr)
+        print(traceback.format_exc(), file=sys.stderr)
         logger.error(f"Error processing frame: {str(e)}")
         logger.error(traceback.format_exc())
         return jsonify({"error": f"Processing error: {str(e)}"}), 500
