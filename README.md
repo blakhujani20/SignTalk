@@ -42,7 +42,7 @@ SignTalk is a web-based real-time sign language communication app that bridges t
 
 ## 🧪 Demo Usage
 
-1. Go to [https://yourdomain.com](https://yourdomain.com) or run locally (see below)
+1. Go to [https://signtalk-pf3b.onrender.com](https://signtalk-pf3b.onrender.com) or run locally (see below)
 2. Try the **Demo Mode** from homepage to test recognition without a call
 3. For full experience:
    - Open the Video Call page
