@@ -9,10 +9,10 @@ class SignLanguageModel:
         try:
             if model_path is None:
                 potential_paths = [
-                    os.path.join(os.path.dirname(__file__), 'asl_model.h5'),
-                    os.path.join(os.path.dirname(os.path.dirname(__file__)), 'models', 'asl_model.h5'),
-                    'asl_model.h5',  # Current directory
-                    '/app/models/asl_model.h5',  # Docker container path
+                    os.path.join(os.path.dirname(__file__), 'asl_model.keras'),
+                    os.path.join(os.path.dirname(os.path.dirname(__file__)), 'models', 'asl_model.keras'),
+                    'asl_model.keras',  # Current directory
+                    '/app/models/asl_model.keras',  # Docker container path
                 ]
                 
                 for path in potential_paths:
