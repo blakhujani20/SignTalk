@@ -15,14 +15,22 @@ from utils.postprocessing import form_sentence
 if not os.path.exists('logs'):
     os.mkdir('logs')
 
+logger = logging.getLogger('signtalk')
+logger.setLevel(logging.INFO)
+
+console_handler = logging.StreamHandler()
+console_handler.setFormatter(logging.Formatter(
+    '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'
+))
+logger.addHandler(console_handler)
+
+if not os.path.exists('logs'):
+    os.mkdir('logs')
+
 file_handler = RotatingFileHandler('logs/signtalk.log', maxBytes=10240, backupCount=10)
 file_handler.setFormatter(logging.Formatter(
     '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'
 ))
-file_handler.setLevel(logging.INFO)
-
-logger = logging.getLogger('signtalk')
-logger.setLevel(logging.INFO)
 logger.addHandler(file_handler)
 logger.info('SignTalk startup')
 
