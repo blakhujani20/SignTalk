@@ -56,27 +56,48 @@ function stopSignDetection() {
     console.log("[SIGN] Stopped sign language detection");
 }
 
+const clientId = 'client_' + Math.random().toString(36).substring(2, 9);
 function captureAndProcessFrame(videoElement, canvas, ctx) {
     if (!videoElement || videoElement.paused || videoElement.ended) {
         return;
     }
 
-    ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
-    canvas.toBlob((blob) => {
-        if (!blob) return;
-        const formData = new FormData();
-        formData.append('frame', blob, 'frame.jpg');
+    try {
+        canvas.width = videoElement.videoWidth || 320;
+        canvas.height = videoElement.videoHeight || 240;
         
-        fetch('/predict', {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-            processSignPrediction(data);
-        })
-        .catch(error => console.error("[ERROR] Failed to get prediction:", error));
-    }, 'image/jpeg', 0.8);
+        ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+        
+        canvas.toBlob((blob) => {
+            if (!blob) {
+                console.error("[ERROR] Failed to create blob from canvas");
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('frame', blob, 'frame.jpg');
+            
+            console.log("[DEBUG] Sending frame blob size:", blob.size);
+            
+            fetch('/predict?client_id=' + clientId, {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Server responded with ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log("[DEBUG] Received prediction:", data);
+                processSignPrediction(data);
+            })
+            .catch(error => console.error("[ERROR] Failed to get prediction:", error));
+        }, 'image/jpeg', 0.8);
+    } catch (e) {
+        console.error("[ERROR] Frame capture error:", e);
+    }
 }
 
 function processSignPrediction(data) {

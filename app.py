@@ -85,30 +85,36 @@ def serve_static(path):
 @app.route('/predict', methods=['POST'])
 def predict():
     from flask import session
+    import traceback
+    import uuid
+
     global prediction_history, last_prediction, last_prediction_time
-
+    client_id = request.args.get('client_id', 'default')
     if 'user_id' not in session:
-        import uuid
-        session['user_id'] = str(uuid.uuid4())
-    
-    user_id = session.get('user_id', 'default')
-
-    if user_id not in prediction_history:
-        prediction_history[user_id] = []
-    if user_id not in last_prediction:
-        last_prediction[user_id] = None
-    if user_id not in last_prediction_time:
-        last_prediction_time[user_id] = time.time()
-
-    if model is None:
-        return jsonify({"error": "Model not loaded"}), 500
-
-    file = request.files.get('frame')
-    if not file:
-        logger.warning("No frame provided in request")
-        return jsonify({"error": "No frame provided"}), 400
+        session['user_id'] = client_id or str(uuid.uuid4())
+    user_id = session.get('user_id', client_id)
 
     try:
+        logger.info(f"Received prediction request: Content-Type: {request.content_type}, Content-Length: {request.content_length}")
+
+        if user_id not in prediction_history:
+            prediction_history[user_id] = []
+        if user_id not in last_prediction:
+            last_prediction[user_id] = None
+        if user_id not in last_prediction_time:
+            last_prediction_time[user_id] = time.time()
+
+        if model is None:
+            logger.error("Model not loaded")
+            return jsonify({"error": "Model not loaded"}), 500
+
+        file = request.files.get('frame')
+        if not file:
+            logger.warning("No frame provided in request")
+            return jsonify({"error": "No frame provided"}), 400
+
+        logger.info(f"Received file: {file.filename}, Content-Type: {file.content_type}")
+
         img_bytes = file.read()
         nparr = np.frombuffer(img_bytes, np.uint8)
         frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
@@ -117,13 +123,12 @@ def predict():
             logger.warning("Received empty or corrupted frame")
             return jsonify({"error": "Invalid frame"}), 400
 
-        logger.info(f"Received frame with shape: {frame.shape}")
-
+        logger.info(f"Decoded frame with shape: {frame.shape}")
         processed_frame, prediction, confidence = process_frame(frame, model)
 
-        current_time = time.time()
         logger.info(f"Prediction: {prediction}, Confidence: {confidence:.2f}")
 
+        current_time = time.time()
         if confidence > prediction_threshold and (
             last_prediction[user_id] != prediction or 
             current_time - last_prediction_time[user_id] > cooldown_period
@@ -148,13 +153,9 @@ def predict():
         })
 
     except Exception as e:
-        import traceback
-        import sys
-        print("🔥 Exception in /predict:", file=sys.stderr)
-        print(traceback.format_exc(), file=sys.stderr)
-        logger.error(f"Error processing frame: {str(e)}")
+        logger.error(f"Error in predict endpoint: {str(e)}")
         logger.error(traceback.format_exc())
-        return jsonify({"error": f"Processing error: {str(e)}"}), 500
+        return jsonify({"error": str(e), "traceback": traceback.format_exc()}), 500
 
 
 @app.route('/clear_history', methods=['POST'])
