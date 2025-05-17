@@ -59,7 +59,6 @@ def process_frame(frame, model):
         if w > 200:
             frame = cv2.flip(frame, 1)
 
-        # 
         try:
             processed_img, annotated_frame, hand_detected = model.preprocess_image(frame)
             logger.info(f"Preprocessed image shape: {processed_img.shape}, Hand detected: {hand_detected}")
@@ -69,15 +68,19 @@ def process_frame(frame, model):
             return frame, "preprocess_error", 0.0
 
         try:
-            prediction = model.model.predict(np.expand_dims(processed_img, axis=0))
+            with tf.device('/CPU:0'):
+                prediction = model.model(np.expand_dims(processed_img, axis=0), training=False).numpy()
+
             predicted_class_idx = np.argmax(prediction[0])
             confidence = float(prediction[0][predicted_class_idx])
             predicted_class = model.classes[predicted_class_idx]
             logger.info(f"Model prediction successful: {predicted_class} with confidence {confidence:.2f}")
+
         except Exception as pred_error:
             logger.error(f"Error in model prediction: {str(pred_error)}")
             logger.error(traceback.format_exc())
             return frame, "prediction_error", 0.0
+
 
         cv2.putText(
             frame,
