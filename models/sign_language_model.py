@@ -6,52 +6,59 @@ import os
 
 class SignLanguageModel:
     def __init__(self, model_path=None):
-        try:
-            if model_path is None:
-                potential_paths = [
-                    os.path.join(os.path.dirname(__file__), 'asl_model.h5'),
-                    os.path.join(os.path.dirname(os.path.dirname(__file__)), 'models', 'asl_model.h5'),
-                    'asl_model.h5',  # Current directory
-                    '/app/models/asl_model.h5',  # Docker container path
-                ]
-                
-                for path in potential_paths:
-                    if os.path.exists(path):
-                        model_path = path
-                        print(f"[INFO] Found model at: {model_path}")
-                        break
-                        
+        global cached_model
+        if 'cached_model' in globals() and cached_model is not None:
+            self.model = cached_model
+            print("[INFO] Using cached model")
+        else:
+            try:
                 if model_path is None:
-                    raise FileNotFoundError("Could not find model file in any of the expected locations")
-            
-            print(f"[INFO] Loading model from: {model_path}")
-            self.model = tf.keras.models.load_model(model_path, compile=False)
-            
-            print("[DEBUG] Model input shape:", self.model.input_shape)
-            print("[DEBUG] Model output shape:", self.model.output_shape)
-            
-            self.mp_hands = mp.solutions.hands
-            self.hands = self.mp_hands.Hands(
-                static_image_mode=False,
-                max_num_hands=1,
-                min_detection_confidence=0.5,
-                min_tracking_confidence=0.5
-            )
-            self.mp_drawing = mp.solutions.drawing_utils
+                    potential_paths = [
+                        os.path.join(os.path.dirname(__file__), 'asl_model.h5'),
+                        os.path.join(os.path.dirname(os.path.dirname(__file__)), 'models', 'asl_model.h5'),
+                        'asl_model.h5', 
+                        '/app/models/asl_model.h5', 
+                    ]
+                    
+                    for path in potential_paths:
+                        if os.path.exists(path):
+                            model_path = path
+                            print(f"[INFO] Found model at: {model_path}")
+                            break
+                            
+                    if model_path is None:
+                        raise FileNotFoundError("Could not find model file in any of the expected locations")
+                
+                print(f"[INFO] Loading model from: {model_path}")
+                self.model = tf.keras.models.load_model(model_path, compile=False)
+                
+                print("[DEBUG] Model input shape:", self.model.input_shape)
+                print("[DEBUG] Model output shape:", self.model.output_shape)
+                
+                self.mp_hands = mp.solutions.hands
+                self.hands = self.mp_hands.Hands(
+                    static_image_mode=False,
+                    max_num_hands=1,
+                    min_detection_confidence=0.5,
+                    min_tracking_confidence=0.5
+                )
+                self.mp_drawing = mp.solutions.drawing_utils
 
-            self.classes = [
-                'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J',
-                'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T',
-                'U', 'V', 'W', 'X', 'Y', 'Z', 'del', 'nothing', 'space'
-            ]
-        except Exception as e:
-            print(f"[ERROR] Failed to initialize model: {e}")
-            raise
+                self.classes = [
+                    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J',
+                    'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T',
+                    'U', 'V', 'W', 'X', 'Y', 'Z', 'del', 'nothing', 'space'
+                ]
+                cached_model = self.model
+            except Exception as e:
+                print(f"[ERROR] Failed to initialize model: {e}")
+                raise
     
     def preprocess_image(self, image):
 
-        if image.shape[0] < 100 or image.shape[1] < 100:
-            print("[DEBUG] Frame too small for reliable hand detection.")
+        if image.shape[0] > 320 or image.shape[1] > 320:
+            scale = min(320 / image.shape[0], 320 / image.shape[1])
+            image = cv2.resize(image, (0, 0), fx=scale, fy=scale)
 
             fallback_img = cv2.resize(image, (64, 64))
             fallback_img = cv2.cvtColor(fallback_img, cv2.COLOR_BGR2RGB)
@@ -133,10 +140,11 @@ class SignLanguageModel:
         return annotated_image, label, confidence
 
     
-    def get_classes(self):
+    def get_classes(
+    self):
         return self.classes
     
-    # Add to SignLanguageModel class
+    # Add to Sig    nLanguageModel class
     def fallback_predict(self, image):
         """Provide a simple fallback when regular prediction fails"""
         try:

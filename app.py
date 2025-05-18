@@ -41,10 +41,11 @@ socketio = SocketIO(
     app, 
     cors_allowed_origins="*", 
     async_mode='gevent', 
-    ping_timeout=60, 
+    ping_timeout=120, 
     ping_interval=25,
-    ssl_context=None
-)
+    ssl_context=None,
+    max_http_buffer_size=5e6 
+    )
 
 try:
     logger.info("Starting to load sign language model...")
@@ -92,8 +93,24 @@ def video_feed():
 def serve_static(path):
     return send_from_directory('static', path)
 
+model = None
+def get_model():
+    global model
+    if model is None:
+        try:
+            logger.info("Lazy loading sign language model...")
+            model = SignLanguageModel()
+            logger.info(f"Model loaded successfully. Input shape: {model.model.input_shape}")
+        except Exception as e:
+            logger.error(f"Error loading model: {str(e)}")
+            logger.error(traceback.format_exc())
+    return model
+
 @app.route('/predict', methods=['POST'])
 def predict():
+    model = get_model()
+    if model is None:
+        return jsonify({"error": "Model could not be loaded"}), 500
     try:
         client_id = request.args.get('client_id', 'default')
         logger.info(f"Received prediction request from client: {client_id}")

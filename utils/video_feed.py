@@ -51,9 +51,17 @@ def generate_placeholder_frame(message):
 
 def process_frame(frame, model):
     try:
+        if hasattr(process_frame, 'frame_count'):
+            process_frame.frame_count += 1
+        else:
+            process_frame.frame_count = 0
+        if process_frame.frame_count % 2 != 0:
+            if hasattr(process_frame, 'last_result'):
+                return process_frame.last_result
+
         if model is None:
             raise ValueError("Model is not loaded")
-            
+
         h, w, _ = frame.shape
         logger.info(f"Processing frame with dimensions {w}x{h}")
 
@@ -66,7 +74,9 @@ def process_frame(frame, model):
         except Exception as preproc_error:
             logger.error(f"Error in preprocess_image: {str(preproc_error)}")
             logger.error(traceback.format_exc())
-            return frame, "preprocess_error", 0.0
+            result = (frame, "preprocess_error", 0.0)
+            process_frame.last_result = result
+            return result
 
         try:
             with tf.device('/CPU:0'):
@@ -80,8 +90,9 @@ def process_frame(frame, model):
         except Exception as pred_error:
             logger.error(f"Error in model prediction: {str(pred_error)}")
             logger.error(traceback.format_exc())
-            return frame, "prediction_error", 0.0
-
+            result = (frame, "prediction_error", 0.0)
+            process_frame.last_result = result
+            return result
 
         cv2.putText(
             frame,
@@ -93,7 +104,9 @@ def process_frame(frame, model):
             2
         )
 
-        return frame, predicted_class, confidence
+        result = (frame, predicted_class, confidence)
+        process_frame.last_result = result
+        return result
 
     except Exception as e:
         logger.error(f"Error in process_frame: {str(e)}")
@@ -107,4 +120,6 @@ def process_frame(frame, model):
             (0, 0, 255),
             2
         )
-        return frame, "error", 0.0
+        result = (frame, "error", 0.0)
+        process_frame.last_result = result
+        return result

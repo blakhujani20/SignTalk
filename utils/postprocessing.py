@@ -11,28 +11,44 @@ except:
 def form_sentence(prediction_history):
     if not prediction_history:
         return ""
-    
-    filtered_signs = []
+    current_word = []
+    words = []
+    consecutive_same = 0
     prev_sign = None
     
     for sign in prediction_history:
         if sign in ['nothing', 'no_hand', 'error']:
             continue
-    
-        if sign == 'del' and filtered_signs:
-            filtered_signs.pop()  
+        
+        if sign == 'del':
+            if current_word:
+                current_word.pop()
+            elif words:
+                current_word = list(words.pop())
             continue
         elif sign == 'space':
-            if filtered_signs and filtered_signs[-1] != ' ':
-                filtered_signs.append(' ')
+            if current_word:
+                words.append(''.join(current_word))
+                current_word = []
             continue
-        if sign != prev_sign:
-            if sign.isalpha() and len(sign) == 1:
-                filtered_signs.append(sign)
+            
+        if sign == prev_sign:
+            consecutive_same += 1
+            if consecutive_same >= 3 and sign.isalpha():
+                current_word.append(sign)
+                consecutive_same = 0
+        else:
+            consecutive_same = 0
+            if sign.isalpha():
+                current_word.append(sign)
             prev_sign = sign
     
-    raw_text = ''.join(filtered_signs)
-    text = capitalize_sentences(raw_text)
+    if current_word:
+        words.append(''.join(current_word))
+    raw_text = ' '.join(words)
+    text = expand_abbreviations(raw_text)
+    text = detect_grammar_issues(text)
+    text = capitalize_sentences(text)
     
     return text
 

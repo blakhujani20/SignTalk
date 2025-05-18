@@ -5,8 +5,9 @@ let lastPrediction = null;
 let lastPredictionTime = 0;
 let clientId = 'client_' + Math.random().toString(36).substring(2, 9);
 let failedAttempts = 0;
+let backoffDelay = 1000;
 const predictionThreshold = 0.6;
-const cooldownPeriod = 500; // ms
+const cooldownPeriod = 500; 
 
 document.addEventListener('DOMContentLoaded', () => {
     const isDeafMode = window.location.search.includes("deaf=true");
@@ -14,14 +15,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (isDeafMode) {
         console.log("[SIGN] Deaf mode detected, will start camera + capture");
 
-        // START CAMERA
         if (typeof startLocalVideo === 'function') {
             startLocalVideo();
         } else {
             console.error("[ERROR] startLocalVideo() is not defined or not loaded");
         }
 
-        // INIT SIGN DETECTION WHEN VIDEO STARTS PLAYING
         const localVideo = document.getElementById('localVideo');
         if (localVideo) {
             localVideo.addEventListener('playing', () => {
@@ -33,11 +32,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-
 function startSignDetection(videoElement) {
     if (isCapturing) return;
     isCapturing = true;
-    
+
     console.log("[SIGN] Starting sign language detection");
 
     const canvas = document.createElement('canvas');
@@ -45,43 +43,46 @@ function startSignDetection(videoElement) {
     canvas.height = 240;
     const ctx = canvas.getContext('2d');
 
-    captureInterval = setInterval(() => {
+    captureInterval = setTimeout(() => {
         captureAndProcessFrame(videoElement, canvas, ctx);
-    }, 200); 
+    }, 200);
 }
 
 function stopSignDetection() {
     if (!isCapturing) return;
-    
+
     clearInterval(captureInterval);
     isCapturing = false;
     console.log("[SIGN] Stopped sign language detection");
 }
 
 function captureAndProcessFrame(videoElement, canvas, ctx) {
+    const startTime = performance.now();
+
     if (!videoElement || videoElement.paused || videoElement.ended) {
         console.log("[DEBUG] Video not ready for processing");
+        scheduleNextCapture(startTime);
         return;
     }
 
     try {
-        // Ensure proper dimensions
         canvas.width = videoElement.videoWidth || 320;
         canvas.height = videoElement.videoHeight || 240;
-        
+
         ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
-        
+
         canvas.toBlob((blob) => {
             if (!blob) {
                 console.error("[ERROR] Failed to create blob from canvas");
+                scheduleNextCapture(startTime);
                 return;
             }
-            
+
             const formData = new FormData();
             formData.append('frame', blob, 'frame.jpg');
-            
+
             console.log(`[DEBUG] Sending frame blob size: ${blob.size}`);
-            
+
             fetch(`/predict?client_id=${clientId}`, {
                 method: 'POST',
                 body: formData
@@ -93,37 +94,49 @@ function captureAndProcessFrame(videoElement, canvas, ctx) {
                 return response.json();
             })
             .then(data => {
-                // Check if data has required fields
                 if (data && typeof data.prediction !== 'undefined' && typeof data.confidence !== 'undefined') {
                     console.log(`[SIGN] Prediction: ${data.prediction}, Confidence: ${data.confidence}`);
                     processSignPrediction(data);
+                    backoffDelay = 1000; 
                 } else {
                     console.warn("[WARN] Received incomplete prediction data:", data);
                 }
             })
             .catch(error => {
                 console.error("[ERROR] Failed to get prediction:", error);
-                // After several failed attempts, consider restarting the sign detection
                 failedAttempts++;
                 if (failedAttempts > 5) {
-                    console.log("[SIGN] Too many failed attempts, restarting sign detection...");
+                    backoffDelay = Math.min(backoffDelay * 2, 30000); 
+                    console.log(`[SIGN] Too many failed attempts, restarting with delay ${backoffDelay}ms`);
                     stopSignDetection();
-                    setTimeout(() => startSignDetection(videoElement), 3000);
+                    setTimeout(() => startSignDetection(videoElement), backoffDelay);
                     failedAttempts = 0;
+                    return;
                 }
+            })
+            .finally(() => {
+                scheduleNextCapture(startTime);
             });
-        }, 'image/jpeg', 0.7); // Reduced quality for better performance
+
+        }, 'image/jpeg', 0.7);
     } catch (e) {
         console.error("[ERROR] Frame capture error:", e);
+        scheduleNextCapture(startTime);
+    }
+
+    function scheduleNextCapture(startTime) {
+        const processingTime = performance.now() - startTime;
+        const nextCaptureDelay = Math.max(100, Math.min(500, processingTime * 2));
+        setTimeout(() => captureAndProcessFrame(videoElement, canvas, ctx), nextCaptureDelay);
     }
 }
 
 function processSignPrediction(data) {
     const { prediction, confidence, sentence } = data;
     const currentTime = Date.now();
-    
+
     console.log(`[SIGN] Prediction: ${prediction}, Confidence: ${confidence}`);
-    if (confidence > predictionThreshold && 
+    if (confidence > predictionThreshold &&
         (lastPrediction !== prediction || currentTime - lastPredictionTime > cooldownPeriod)) {
 
         lastPrediction = prediction;
@@ -142,7 +155,6 @@ function processSignPrediction(data) {
 
 function sendSignText(sentence) {
     if (sentence && window.socket && window.roomName) {
- 
         console.log(`[SIGN] Sending text: "${sentence}"`);
         window.socket.emit('sign_text', {
             room: window.roomName,
